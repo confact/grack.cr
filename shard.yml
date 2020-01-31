@@ -1,0 +1,7 @@
+name: grack.cr
+version: 1.0.0
+
+authors:
+  - Håkan Nylén <hakan@dun.se>
+
+license: MIT
