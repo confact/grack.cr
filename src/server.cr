@@ -2,7 +2,6 @@ require "logger"
 require "file_utils"
 
 class GitServer
-
   @contexted : HTTP::Server::Context
   @reqfile : String | Nil
   @rpc : String | Nil
@@ -29,9 +28,6 @@ class GitServer
   end
 
   def call
-    logger = Logger.new(STDOUT)
-    logger.info "Path = #{@contexted.request.path}"
-    logger.info "params = #{@contexted.request.query_params}"
     cmdr, path, reqfile, rpc = match_routing
     @reqfile = reqfile if reqfile.is_a?(String)
     @rpc = rpc if rpc.is_a?(String) && !rpc.empty?
@@ -43,7 +39,6 @@ class GitServer
       logger.info "GIT response - 404 - dir not exist - #{@dir}"
     end
 
-    logger.info "cmd, @dir = #{cmd}, #{@dir}, #{path}"
     render_not_found unless @dir
     render_not_found unless cmd
 
@@ -73,9 +68,6 @@ class GitServer
 
   def get_info_refs
     service_name = get_service_type
-    logger = Logger.new(STDOUT)
-    logger.info "service_name = #{service_name}"
-    logger.info "has_access?(server_name) = #{has_access(service_name)}"
     if has_access(service_name)
       cmd = git_command("#{service_name} --stateless-rpc --advertise-refs .")
 
@@ -143,17 +135,10 @@ class GitServer
 
     yield
 
-    if size = File.size(reqfile)
-      @contexted.response.headers.merge!({"Content-Length" => size.to_s})
-      File.open(reqfile, "rb") do |file|
-        IO.copy(file, @contexted.response)
-      end
-    else
-      size = File.size(reqfile)
-      @contexted.response.headers.merge!({"Content-Length" => size.to_s})
-      File.open(reqfile, "rb") do |file|
-        IO.copy(file, @contexted.response)
-      end
+    size = File.size(reqfile)
+    @contexted.response.headers.merge!({"Content-Length" => size.to_s})
+    File.open(reqfile, "rb") do |file|
+      IO.copy(file, @contexted.response)
     end
   end
 
@@ -166,8 +151,6 @@ class GitServer
 
   def get_service_type
     service_type = @contexted.request.query_params["service"]
-    logger = Logger.new(STDOUT)
-    logger.info "service_type = #{service_type}"
     return false unless service_type
     return false if service_type[0, 4] != "git-"
 
@@ -177,9 +160,7 @@ class GitServer
   def match_routing
     cmd = nil
     path = nil
-    logger = Logger.new(STDOUT)
     @services.each do |line|
-      logger.info "service line = #{line}"
       method, handler, match, rpc = line
       next unless m = Regex.new(match).match(@contexted.request.path)
       return [->render_method_not_allowed, "", ""] if method != @contexted.request.method
@@ -187,33 +168,24 @@ class GitServer
       cmd = handler
       path = m[1]
       file = @contexted.request.path.sub(path + "/", "")
-      logger.info "return = #{[cmd, path, file, rpc]}"
       return [cmd, path, file, rpc]
     end
     [] of String
   end
 
   def has_access(rpc, check_content_type = false)
-    logger = Logger.new(STDOUT)
-    logger.info "check_content_type = #{check_content_type}"
-    logger.info @contexted.request.headers
     if check_content_type
       return false if @contexted.request.headers["Content-Type"] != "application/x-git-%s-request" % rpc
     end
     return false unless %w[upload-pack receive-pack].includes? rpc
 
-    if rpc == "receive-pack"
-      return true
-    end
-    if rpc == "upload-pack"
-      return true
-    end
-    #get_config_setting(rpc)
+    get_config_setting(rpc)
   end
 
-  def get_config_setting(service_name)
+  def get_config_setting(service_name) : Bool
     service_name = service_name.nil? || service_name.is_a?(Bool) ? Nil : service_name.gsub("-", "")
     setting = get_git_config("http.#{service_name}")
+    return true if setting.empty?
     if service_name == "uploadpack"
       return setting != "false"
     else
@@ -227,11 +199,11 @@ class GitServer
   end
 
   def read_body
-    input = if @contexted["HTTP_CONTENT_ENCODING"] =~ /gzip/
-              Gzip::Reader.new(@contexted.request.body, true).read
-            else
-              @contexted.request.body.read
-            end
+    if @contexted["HTTP_CONTENT_ENCODING"] =~ /gzip/
+      Gzip::Reader.new(@contexted.request.body, true).read
+    else
+      @contexted.request.body.read
+    end
   end
 
   def update_server_info

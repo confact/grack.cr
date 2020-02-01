@@ -31,9 +31,5 @@ if you want to add this to your own code/application, add the handler to the htt
 
 You can move the classes in src (or require them) and use them in your own http server and change them if needed.
 
-
-## Not done yet
-* make receive_pack and upload_pack available based on git config. Now it is accepted always. Which is mostly what you want. But in some cases it is disabled.
-
 ## Maintainers
 - Håkan Nylén (confact)
